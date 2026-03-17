@@ -66,6 +66,7 @@ def transform_data(output_csv_path: str | Path | None = None) -> dict[str, int |
         f"favorite, w_date, timestamp, link_ori, sitename "
         f"FROM {settings.raw_table}"
     )
+    # Transform always reads from the raw PostgreSQL table created by the extract step.
     df = pd.read_sql(text(query), con=engine)
 
     if df.empty:
@@ -74,6 +75,7 @@ def transform_data(output_csv_path: str | Path | None = None) -> dict[str, int |
     source_count = len(df)
     logger.info("Starting transform for %s records", source_count)
 
+    # Remove exact duplicates first, then enforce one record per product id.
     duplicate_rows_removed = int(df.duplicated().sum())
     df = df.drop_duplicates().copy()
 
@@ -87,10 +89,12 @@ def transform_data(output_csv_path: str | Path | None = None) -> dict[str, int |
     df["delivery_region"] = df["delivery"].apply(_normalize_text)
     df["link_ori"] = df["link_ori"].astype("string").str.strip().replace("", pd.NA)
 
+    # Convert hierarchical category text into analysis-friendly dimensions.
     category_tokens = df["item_category_detail"].apply(_extract_category_tokens)
     df["main_category"] = category_tokens.str[0]
     df["category_path"] = category_tokens.apply(lambda tokens: " > ".join(tokens))
 
+    # Parse text metrics like "8.1k" into numeric values so they can be validated and modeled.
     df["price_original"] = df["price_ori"].apply(_parse_compact_number)
     df["price_actual"] = df["price_actual"].apply(_parse_compact_number)
     df["item_rating"] = df["item_rating"].apply(_parse_compact_number)
@@ -102,6 +106,7 @@ def transform_data(output_csv_path: str | Path | None = None) -> dict[str, int |
     invalid_price_removed = int(invalid_price_mask.sum())
     df = df.loc[~invalid_price_mask].copy()
 
+    # Feature engineering: derive discount, title length, and normalized timestamps.
     df["price_original"] = df["price_original"].where(df["price_original"] > 0, df["price_actual"])
     df["discount_pct"] = (
         ((df["price_original"] - df["price_actual"]) / df["price_original"])
@@ -141,6 +146,7 @@ def transform_data(output_csv_path: str | Path | None = None) -> dict[str, int |
         raise ValueError("All records were removed during transformation.")
 
     popularity_threshold = float(df["total_sold_count"].median())
+    # The training label is built from the current batch: products sold above the median are "popular".
     df["is_popular"] = df["total_sold_count"].ge(popularity_threshold)
 
     feature_columns = [
@@ -158,6 +164,7 @@ def transform_data(output_csv_path: str | Path | None = None) -> dict[str, int |
 
     model_name = "logistic_regression_popularity_classifier"
     if target.nunique() < 2:
+        # Very small demo batches can contain only one class; use a stable fallback instead of failing.
         logger.warning(
             "Current batch contains only one popularity class. Falling back to DummyClassifier for demo stability."
         )
@@ -170,6 +177,7 @@ def transform_data(output_csv_path: str | Path | None = None) -> dict[str, int |
         df["ml_popularity_score"] = float(constant_class)
         df["ml_predicted_popular"] = bool(constant_class)
     else:
+        # Train a lightweight classifier so the clean table contains both business features and ML scores.
         X_train, X_test, y_train, y_test = train_test_split(
             model_features,
             target,
@@ -201,6 +209,7 @@ def transform_data(output_csv_path: str | Path | None = None) -> dict[str, int |
         raise ValueError(f"Validation failed. Remaining NULL values: {remaining_nulls}")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    # Save both the transformed dataset and model artifacts for the downstream load step and demo review.
     df.to_csv(output_path, index=False)
     dump(popularity_model, settings.model_artifact_path)
 
