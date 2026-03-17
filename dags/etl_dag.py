@@ -9,6 +9,7 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 
 PROJECT_ROOT = Path("/opt/airflow")
+# Thêm thư mục gốc của project vào Python path để Airflow import được module trong scripts/.
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -26,6 +27,7 @@ def run_extract() -> dict[str, int | str]:
 
 
 def run_transform(**context) -> dict[str, int | str]:
+    # Lấy metadata của batch từ task extract để truyền tiếp cho các bước sau qua XCom.
     extract_result = context["ti"].xcom_pull(task_ids="extract_data") or {}
     result = transform_data()
     for key in [
@@ -48,6 +50,7 @@ def run_load(**context) -> dict[str, int | str]:
     if not transform_result or "output_path" not in transform_result:
         raise ValueError("Missing transformed file path from transform_data task.")
 
+    # Nếu batch hiện tại bắt đầu từ 0 thì vòng demo đã quay lại đầu dataset và cần reset bảng clean.
     reset_table = int(transform_result.get("batch_start", 0)) == 0
     result = load_data(
         transform_result["output_path"],
@@ -81,4 +84,5 @@ with DAG(
         python_callable=run_load,
     )
 
+    # Dependency của DAG: Extract -> Transform -> Load.
     extract_task >> transform_task >> load_task
