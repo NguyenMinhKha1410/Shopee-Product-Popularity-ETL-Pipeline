@@ -35,7 +35,7 @@ def extract_data(source_csv_path: str | Path | None = None) -> dict[str, int | s
         raise FileNotFoundError(f"Source file not found: {csv_path}")
 
     logger.info("Reading Shopee source CSV from %s", csv_path)
-    # Extract always starts from the source CSV and keeps only the columns needed downstream.
+    # Bước Extract luôn bắt đầu từ file CSV nguồn và chỉ giữ lại các cột cần cho pipeline.
     df = pd.read_csv(csv_path, encoding="utf-8-sig")
 
     missing_columns = [column for column in REQUIRED_COLUMNS if column not in df.columns]
@@ -48,7 +48,7 @@ def extract_data(source_csv_path: str | Path | None = None) -> dict[str, int | s
 
     total_source_count = len(df)
     batch_size = max(1, settings.demo_batch_size)
-    # The demo state allows each DAG run to continue from the next slice of the dataset.
+    # File state giúp mỗi lần chạy DAG tiếp tục từ batch kế tiếp của dataset.
     state = _read_demo_state(settings.demo_state_path)
     batch_start = int(state.get("next_offset", 0))
     cycle_number = int(state.get("cycle_number", 1))
@@ -78,7 +78,7 @@ def extract_data(source_csv_path: str | Path | None = None) -> dict[str, int | s
     )
     engine = get_engine(settings)
 
-    # Raw data is loaded as-is into the raw table so transform can work from a stable staging layer.
+    # Dữ liệu raw được nạp nguyên trạng vào bảng raw để bước Transform luôn có đầu vào ổn định.
     batch_df.to_sql(
         name=settings.raw_table,
         con=engine,
@@ -116,7 +116,7 @@ def extract_data(source_csv_path: str | Path | None = None) -> dict[str, int | s
 
     next_offset = batch_end
     wrapped_for_next_run = next_offset >= total_source_count
-    # Persist batch progress so the next trigger continues from the correct offset.
+    # Lưu lại tiến độ batch để lần trigger tiếp theo đọc đúng offset kế tiếp.
     _write_demo_state(
         settings.demo_state_path,
         {

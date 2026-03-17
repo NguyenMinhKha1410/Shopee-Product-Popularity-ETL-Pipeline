@@ -127,14 +127,14 @@ def load_data(
         raise ValueError(f"Validation failed. Remaining NULL values: {remaining_nulls}")
 
     engine = get_engine(settings)
-    # Load uses a stage table first so each batch can be validated and merged safely.
+    # Bước Load dùng bảng stage trước để từng batch được kiểm tra và merge an toàn.
     stage_table = f"{settings.clean_table}_stage"
     batch_count = len(df)
     insert_columns = ", ".join(CLEAN_OUTPUT_COLUMNS)
 
     with engine.begin() as connection:
         if reset_table:
-            # When the demo loop returns to batch 0, the clean table is rebuilt from scratch.
+            # Khi vòng lặp demo quay lại batch 0, bảng clean sẽ được dựng lại từ đầu.
             logger.info("Resetting %s because the demo loop restarted from batch 0", settings.clean_table)
             connection.execute(text(f"DROP TABLE IF EXISTS {settings.clean_table}"))
 
@@ -152,7 +152,7 @@ def load_data(
     )
 
     with engine.begin() as connection:
-        # Delete matching ids before insert so repeated runs behave like an id-based upsert.
+        # Xóa trước các id đã tồn tại để nhiều lần chạy có hành vi giống upsert theo id.
         connection.execute(
             text(
                 f"DELETE FROM {settings.clean_table} AS target "
@@ -166,7 +166,7 @@ def load_data(
                 f"SELECT {insert_columns} FROM {stage_table}"
             )
         )
-        # Indexes are created once and reused to keep demo queries responsive.
+        # Tạo index để các truy vấn demo và phân tích chạy nhanh hơn.
         connection.execute(text(f"DROP TABLE IF EXISTS {stage_table}"))
         connection.execute(
             text(
