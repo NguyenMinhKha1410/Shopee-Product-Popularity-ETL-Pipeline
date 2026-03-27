@@ -2,7 +2,7 @@
 
 ## 1. Giới thiệu hệ thống
 
-Project này đã được chuyển từ bài toán HR sang dataset Shopee. Pipeline đọc dữ liệu sản phẩm từ file `data/shopee_sample_data.csv`, sau đó:
+Pipeline đọc dữ liệu sản phẩm từ file `data/shopee_sample_data.csv`, sau đó:
 
 - Load dữ liệu gốc vào bảng `shopee_raw`
 - Clean và chuẩn hóa dữ liệu sản phẩm
